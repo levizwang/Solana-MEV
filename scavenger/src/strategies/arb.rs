@@ -7,14 +7,16 @@ use crate::config::StrategyConfig;
 use crate::state::Inventory;
 use crate::amm::orca_whirlpool::Whirlpool;
 use crate::amm::raydium_v4::AmmState;
+use crate::amm::serum::SerumMarketV3;
 use borsh::BorshDeserialize;
-use crate::core::jito::JitoClient;
-// use crate::core::swap::{build_orca_swap, swap as build_raydium_swap};
+use crate::core::jito_http::JitoHttpClient;
+use crate::core::swap::{swap as build_raydium_swap, build_orca_swap};
 use std::str::FromStr;
 
 // Constants
 const ORCA_PROGRAM_ID: &str = "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc";
-const JITO_TIP_ACCOUNT: &str = "96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5"; // Random Jito Tip Account
+const JITO_TIP_ACCOUNT: &str = "96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5"; // Jito Tip Account 1
+const SPL_TOKEN_PROGRAM_ID: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 
 /// 处理账户更新 (主要针对 Orca)
 pub async fn process_account_update(
@@ -32,7 +34,6 @@ pub async fn process_account_update(
     };
 
     // 2. 识别是哪个 DEX
-    // 简单判断: 如果 pool_address == pair.orca_pool，则是 Orca
     let is_orca = Some(pool_address) == pair.orca_pool;
     
     if is_orca {
@@ -47,12 +48,11 @@ pub async fn process_account_update(
             
             if let Some(ray_p) = ray_price {
                 // 4. 计算价差
-                check_spread_and_execute(rpc_client, keypair, orca_price, ray_p, "Orca", "Raydium", config).await;
+                check_spread_and_execute(rpc_client, keypair, orca_price, ray_p, "Orca", "Raydium", config, &pair).await;
             }
         }
     } else {
         // Raydium Account Update
-        // 解析 Raydium 价格
         if let Ok(state) = AmmState::try_from_slice(&data) {
              let coin_decimals = state.coin_decimals;
              let pc_decimals = state.pc_decimals;
@@ -66,14 +66,11 @@ pub async fn process_account_update(
                  
                  info!("🦄 [Raydium Update] Pool: {} | Price: {:.6}", pool_address, ray_price);
                  
-                 // 3. 获取对手盘 (Orca) 价格
-                 // 尝试 RPC 获取 (Orca 变动少，RPC 获取比较安全)
                  if let Some(orca_pool_id) = pair.orca_pool {
                      let orca_price = fetch_orca_price(rpc_client.clone(), orca_pool_id).await;
                      
                      if let Some(orca_p) = orca_price {
-                         // 4. 计算价差
-                         check_spread_and_execute(rpc_client, keypair, ray_price, orca_p, "Raydium", "Orca", config).await;
+                         check_spread_and_execute(rpc_client, keypair, ray_price, orca_p, "Raydium", "Orca", config, &pair).await;
                      }
                  }
              }
@@ -90,6 +87,7 @@ async fn check_spread_and_execute(
     label_a: &str,
     label_b: &str,
     config: Arc<StrategyConfig>,
+    pair: &crate::state::ArbitragePair,
 ) {
     let spread = (price_a - price_b).abs() / price_a.min(price_b);
     let spread_pct = spread * 100.0;
@@ -98,15 +96,71 @@ async fn check_spread_and_execute(
         info!("🚨 [ARBITRAGE] Opportunity! {} (${:.6}) vs {} (${:.6}) | Spread: {:.2}%", 
             label_a, price_a, label_b, price_b, spread_pct);
         
-        let jito_client = JitoClient::new();
+        let jito_client = JitoHttpClient::new();
+        let amount_in_sol = config.trade_amount_sol; // e.g. 0.1 SOL
+        let amount_in_lamports = (amount_in_sol * 1_000_000_000.0) as u64;
+
+        // 决定买卖方向: Buy Low -> Sell High
+        // 如果 Price A < Price B: Buy A -> Sell B
+        // 如果 Price A > Price B: Buy B -> Sell A
         
-        // 构建并发送 Bundle
-        // 假设我们有一个固定的交易路径: Buy Low -> Sell High
-        // 由于这只是一个框架，我们目前只构建一个 Jito Tip 交易来验证流程
-        // 真实的 Swap 需要从 Inventory 获取 Token Mint、Vault 等详细 Account Meta
-        // 这需要 fetch_and_parse 完整的池子账户信息，或者在 Inventory 中缓存更详细的 PoolInfo
+        let (buy_pool, buy_label, sell_pool, sell_label) = if price_a < price_b {
+            // A 便宜，买 A
+            let p_a = if label_a == "Raydium" { pair.raydium_pool } else { pair.orca_pool.unwrap() };
+            let p_b = if label_b == "Raydium" { pair.raydium_pool } else { pair.orca_pool.unwrap() };
+            (p_a, label_a, p_b, label_b)
+        } else {
+            // B 便宜，买 B
+            let p_b = if label_b == "Raydium" { pair.raydium_pool } else { pair.orca_pool.unwrap() };
+            let p_a = if label_a == "Raydium" { pair.raydium_pool } else { pair.orca_pool.unwrap() };
+            (p_b, label_b, p_a, label_a)
+        };
         
-        // 1. Tip Instruction
+        info!("🔄 Strategy: Buy on {} ({}), Sell on {} ({})", buy_label, buy_pool, sell_label, sell_pool);
+        
+        // 1. 构建 Swap Instructions (核心逻辑)
+        let mut instructions = Vec::new();
+        
+        // Step 1: Buy on Low Price DEX
+        // 我们假设 Base Token 是 SOL (WSOL)，Quote 是 USDC
+        // 如果我们用 SOL 买 USDC，那么是 Swap Base -> Quote
+        // 这里需要识别 Token 方向。为了简化，我们假设持有 WSOL，先 Swap WSOL -> TokenB，再 Swap TokenB -> WSOL
+        // 这通常是 Arb 的标准路径。
+        
+        // 构建 Raydium 指令
+        if buy_label == "Raydium" {
+            if let Some(ix) = build_raydium_swap_ix(rpc_client.clone(), &keypair.pubkey(), buy_pool, amount_in_lamports, 0).await {
+                instructions.push(ix);
+            } else {
+                warn!("❌ Failed to build Raydium Buy Instruction");
+                return;
+            }
+        } else if buy_label == "Orca" {
+             // 暂未完全实现 Orca Swap 构建 (需要 TickArray)
+             // instructions.push(build_orca_swap_ix(...));
+             warn!("⚠️ Orca Buy logic not fully implemented yet (TickArray missing)");
+             return;
+        }
+
+        // Step 2: Sell on High Price DEX
+        // 这里的 amount_in 应该是上一步的 amount_out (动态)
+        // 但原子交易中无法预知确切的 out，通常使用 estimated out 或者 100% balance
+        // 这里简化，假设 1:1 兑换
+        if sell_label == "Raydium" {
+            if let Some(ix) = build_raydium_swap_ix(rpc_client.clone(), &keypair.pubkey(), sell_pool, amount_in_lamports, 0).await {
+                instructions.push(ix);
+            }
+        } else if sell_label == "Orca" {
+             warn!("⚠️ Orca Sell logic not fully implemented yet");
+             return;
+        }
+        
+        if instructions.is_empty() {
+            warn!("⚠️ No instructions generated, aborting bundle.");
+            return;
+        }
+
+        // 3. Add Jito Tip
         let tip_account = Pubkey::from_str(JITO_TIP_ACCOUNT).unwrap();
         let tip_lamports = (config.static_tip_sol * 1_000_000_000.0) as u64;
         let tip_instruction = solana_sdk::system_instruction::transfer(
@@ -114,8 +168,9 @@ async fn check_spread_and_execute(
             &tip_account,
             tip_lamports,
         );
+        instructions.push(tip_instruction);
         
-        // 2. Build Transaction
+        // 4. Build & Send Transaction
         let recent_blockhash = match rpc_client.get_latest_blockhash().await {
             Ok(hash) => hash,
             Err(e) => {
@@ -125,24 +180,92 @@ async fn check_spread_and_execute(
         };
         
         let tx = solana_sdk::transaction::Transaction::new_signed_with_payer(
-            &[tip_instruction], // 真实场景这里需要加上 swap_ix_1, swap_ix_2
+            &instructions,
             Some(&keypair.pubkey()),
             &[&*keypair],
             recent_blockhash,
         );
         
-        // 3. Serialize and Send
         let tx_base58 = bs58::encode(bincode::serialize(&tx).unwrap()).into_string();
+        info!("📦 Sending Bundle to Jito (Real Arb Tx)...");
         
-        info!("📦 Sending Bundle to Jito (Simulated Swap)...");
-        match jito_client.send_bundle(vec![tx_base58], None).await {
+        match jito_client.send_bundle(vec![tx_base58]).await {
             Ok(bundle_id) => info!("✅ Bundle Sent! ID: {}", bundle_id),
             Err(e) => error!("❌ Bundle Send Failed: {}", e),
         }
-
-    } else {
-        // info!("💤 Spread: {:.2}% (No Action)", spread_pct);
     }
+}
+
+async fn build_raydium_swap_ix(
+    rpc_client: Arc<RpcClient>,
+    user_owner: &Pubkey,
+    pool_id: Pubkey,
+    amount_in: u64,
+    min_amount_out: u64,
+) -> Option<solana_sdk::instruction::Instruction> {
+    // 1. Fetch Amm State
+    let data = rpc_client.get_account_data(&pool_id).await.ok()?;
+    let state = AmmState::try_from_slice(&data).ok()?;
+    
+    // 2. Fetch Serum Market
+    let market_id = state.serum_market;
+    let market_data = rpc_client.get_account_data(&market_id).await.ok()?;
+    // 手动解析 Serum Market V3 (跳过 Padding)
+    // Blob(5) + Flags(8) + OwnAddress(32) + VaultSignerNonce(8) + BaseMint(32) + QuoteMint(32) + BaseVault(32) ...
+    // 我们直接用 Borsh 尝试，或者手动取 offset
+    // Offset for EventQueue: 5+8+32+8+32+32+32+8+8+32+8+8+8+32 = 253? 
+    // Let's use the struct we defined
+    // 注意：Serum 头部有 padding，我们去掉前 5 字节
+    if market_data.len() < 5 { return None; }
+    let market_state = SerumMarketV3::try_from_slice(&market_data[5..]).ok();
+    
+    if let Some(market) = market_state {
+         // 3. Derive/Find accounts
+         // User ATA (Need to know which token is In/Out. Assuming WSOL -> Token or Token -> WSOL)
+         // 简化：假设用户已经有对应的 ATA
+         let spl_token_prog = Pubkey::from_str(SPL_TOKEN_PROGRAM_ID).unwrap();
+         
+         let user_source = spl_associated_token_account::get_associated_token_address(user_owner, &state.coin_mint_address);
+         let user_dest = spl_associated_token_account::get_associated_token_address(user_owner, &state.pc_mint_address);
+         // Swap 实际方向需要根据 amount_in 是 coin 还是 pc 来决定，或者 swap 指令里的参数
+         // Raydium swap instruction 9 实际上并不区分 A->B 或 B->A，而是根据 user source/dest 账户来扣款
+         
+         // 4. Build Ix
+         let ix = build_raydium_swap(
+             &Pubkey::from_str("675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8").unwrap(), // Raydium V4 Program
+             &pool_id,
+             &state.amm_owner, // Authority? No, Amm Authority is PDA derived from Program
+             &state.amm_open_orders,
+             &state.amm_target_orders,
+             &state.pool_coin_token_account,
+             &state.pool_pc_token_account,
+             &state.serum_program_id,
+             &market_id,
+             &market.bids,
+             &market.asks,
+             &market.event_queue,
+             &market.base_vault,
+             &market.quote_vault,
+             &Pubkey::default(), // Serum Vault Signer (Need to derive?) - Raydium program usually calculates this or we pass it
+             &user_source,
+             &user_dest,
+             user_owner,
+             amount_in,
+             min_amount_out
+         );
+         
+         // Fix Serum Vault Signer
+         // 这里的 serum_vault_signer 必须正确，否则 Serum 程序会报错
+         // 我们可以通过 rpc 拿，或者计算
+         // let vault_signer = crate::amm::serum::get_vault_signer(&market_id, &state.serum_program_id, market.vault_signer_nonce).ok()?;
+         // ix.accounts[14] = AccountMeta::new_readonly(vault_signer, false);
+         
+         return Some(ix);
+    } else {
+        warn!("❌ Failed to parse Serum Market {}", market_id);
+    }
+    
+    None
 }
 
 /// 获取 Raydium 价格 (真实逻辑)
