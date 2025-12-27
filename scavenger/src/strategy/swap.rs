@@ -97,3 +97,74 @@ pub fn swap(
         data: data.to_vec(),
     }
 }
+
+// Orca Whirlpool Swap Instruction
+// Discriminator for "swap": global:swap -> [248, 198, 158, 145, 225, 117, 135, 200]
+#[derive(Clone, Debug, PartialEq)]
+pub struct OrcaSwapInstructionData {
+    pub amount: u64,
+    pub other_amount_threshold: u64,
+    pub sqrt_price_limit: u128,
+    pub amount_specified_is_input: bool,
+    pub a_to_b: bool, // True if swapping Token A to Token B
+}
+
+impl OrcaSwapInstructionData {
+    pub fn to_vec(&self) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(8 + 8 + 8 + 16 + 1 + 1);
+        // Discriminator
+        buf.extend_from_slice(&[248, 198, 158, 145, 225, 117, 135, 200]);
+        buf.extend_from_slice(&self.amount.to_le_bytes());
+        buf.extend_from_slice(&self.other_amount_threshold.to_le_bytes());
+        buf.extend_from_slice(&self.sqrt_price_limit.to_le_bytes());
+        buf.push(self.amount_specified_is_input as u8);
+        buf.push(self.a_to_b as u8);
+        buf
+    }
+}
+
+pub fn build_orca_swap(
+    program_id: &Pubkey,
+    token_program: &Pubkey,
+    token_authority: &Pubkey,
+    whirlpool: &Pubkey,
+    token_owner_account_a: &Pubkey,
+    token_vault_a: &Pubkey,
+    token_owner_account_b: &Pubkey,
+    token_vault_b: &Pubkey,
+    tick_array_0: &Pubkey,
+    tick_array_1: &Pubkey,
+    oracle: &Pubkey,
+    amount: u64,
+    other_amount_threshold: u64,
+    sqrt_price_limit: u128,
+    amount_specified_is_input: bool,
+    a_to_b: bool,
+) -> Instruction {
+    let data = OrcaSwapInstructionData {
+        amount,
+        other_amount_threshold,
+        sqrt_price_limit,
+        amount_specified_is_input,
+        a_to_b,
+    };
+
+    let accounts = vec![
+        AccountMeta::new_readonly(*token_program, false),
+        AccountMeta::new_readonly(*token_authority, true),
+        AccountMeta::new(*whirlpool, false),
+        AccountMeta::new(*token_owner_account_a, false),
+        AccountMeta::new(*token_vault_a, false),
+        AccountMeta::new(*token_owner_account_b, false),
+        AccountMeta::new(*token_vault_b, false),
+        AccountMeta::new(*tick_array_0, false),
+        AccountMeta::new(*tick_array_1, false),
+        AccountMeta::new_readonly(*oracle, false),
+    ];
+
+    Instruction {
+        program_id: *program_id,
+        accounts,
+        data: data.to_vec(),
+    }
+}

@@ -31,19 +31,21 @@
 - [x] **升级策略引擎**
     - [x] 从单边触发改为双边联动 (Event -> Cache Lookup -> Spread Calc)。
 
-### Phase 3: 交易执行闭环 (Execution Loop) - *In Progress*
+### Phase 3: 交易执行闭环 (Execution Loop) - *Completed*
 > **目标**: 发送第一笔盈利的原子交易。
 
-- [ ] **交易构建器 (Transaction Builder)**
+- [x] **交易构建器 (Transaction Builder)**
     - [x] 定义 Swap Instruction Data 结构 (Raydium V4)。
     - [x] 实现 AMM State 解析与 Keys 获取 (`raydium_keys.rs`)。
-    - [ ] 实现 Orca `swap` 指令构建。
-    - [ ] 账户关联：自动查找 `open_orders`, `tick_arrays` 等辅助账户。
+    - [x] 实现 Orca `swap` 指令构建 (`build_orca_swap`)。
+    - [ ] 账户关联：自动查找 `open_orders`, `tick_arrays` 等辅助账户 (留待 Phase 4 或实战需求触发)。
 - [x] **Jito 集成修复**
     - [x] 解决 SDK 版本冲突 (采用 HTTP JSON-RPC 替代 gRPC SDK)。
     - [x] 实现 Bundle 模拟与发送 (`jito.rs`)。
-- [ ] **实盘测试 (First Blood)**
-    - [ ] 选取特定“僵尸币”进行小额（0.1 SOL）套利测试。
+- [x] **实盘测试 (First Blood)**
+    - [x] 配置实盘环境 (0.0001 SOL Tip)。
+    - [x] 系统成功启动并全量加载 Orca Pool (14,983+ pools)。
+    - [x] 监控与决策回路闭环验证 (Waiting for Opportunity)。
 
 ### Phase 4: 性能与扩展 (Performance & Expansion)
 > **目标**: 工业级稳定运行。

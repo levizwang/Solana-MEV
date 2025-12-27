@@ -18,17 +18,17 @@ Scavenger 采用 **Rust 异步架构 (Tokio)**，设计目标为毫秒级响应 
 | :--- | :--- | :--- | :--- | :--- |
 | **Monitor** | 多路日志监听 | `scavenger/src/scout/monitor.rs` | `start_monitoring` | 同时订阅 Raydium (`Initialize2`) 和 Orca (`InitializePool`) |
 | **Decoder (Ray)** | Raydium 解析 | `scavenger/src/scout/raydium.rs` | `parse_log_for_new_pool` | 提取 Pool ID, Token Mints |
-| **Decoder (Orca)** | Orca 解析 | `scavenger/src/scout/orca.rs` | `parse_log_for_event` | 提取 Whirlpool ID, Token Mints |
+| **Decoder (Orca)** | Orca 解析 | `scavenger/src/scout/orca.rs` | `parse_log_for_event` | 提取 Whirlpool ID, Token Mints (使用 REST API 辅助冷启动) |
 | **RPC Client** | 链上数据拉取 | `scavenger/src/scout/mod.rs` | `RpcClient::new` | 使用 Non-blocking Client 异步拉取交易详情 |
 
 ### 🧠 策略引擎 (Strategy Engine)
 
 | 逻辑模块 | 关键功能 | 文件路径 | 代码位置/结构 | 备注 |
 | :--- | :--- | :--- | :--- | :--- |
-| **Inventory** | 全网代币索引 | *(Pending Phase 2.5)* | `MemoryCache` | 内存中维护 `HashMap<TokenMint, Vec<PoolAddress>>` |
+| **Inventory** | 全网代币索引 | `scavenger/src/state.rs` | `Inventory` | 内存中维护 `DashMap<TokenMint, Vec<PoolAddress>>` |
 | **Pricing (AMM)** | CPMM 价格计算 | `scavenger/src/amm/raydium_v4.rs` | `calculate_price` | $x \cdot y = k$ 模型 |
-| **Pricing (CLMM)** | Whirlpool 报价 | *(Pending Phase 2.5)* | `TickMath` | 集中流动性 Tick Array 遍历 |
-| **Engine** | 双向比价主控 | `scavenger/src/strategy/engine.rs` | `process_event` | 收到事件 -> 查缓存 -> 比价 -> 触发 |
+| **Pricing (CLMM)** | Whirlpool 报价 | `scavenger/src/amm/orca_whirlpool.rs` | `Whirlpool::decode_current_price` | 解析 `sqrt_price` (Q64.64) 与 Tick Math |
+| **Engine** | 双向比价主控 | `scavenger/src/strategy/engine.rs` | `process_new_pool` | 收到事件 -> 查缓存 -> 比价 -> 触发 |
 | **Risk** | 风险过滤器 | `scavenger/src/strategy/risk.rs` | `check_token_risk` | 检查 Mint/Freeze Authority, Honeypot |
 
 ### ⚙️ 执行与基础设施 (Infrastructure)
