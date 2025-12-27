@@ -12,6 +12,7 @@ use solana_client::nonblocking::rpc_client::RpcClient;
 mod monitor; // 引入监控模块
 pub mod raydium; // 引入 Raydium 解析模块
 pub mod orca; // 引入 Orca 解析模块
+pub mod api; // 引入 API 模块
 
 // use crate::strategy::engine; // 引入策略引擎 (removed unused import)
 
