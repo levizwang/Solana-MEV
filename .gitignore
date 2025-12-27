@@ -1,0 +1,30 @@
+# Rust 构建产物
+target/
+**/target/
+
+# 密钥与敏感文件
+*.json
+!package.json
+!tsconfig.json
+# 保留示例配置，但不保留真实密钥
+!config.json
+!scavenger/config.toml
+
+# 这是一个通配符，我们要小心不要忽略了项目配置
+# 重新包含必要的 json (如果有的话)，但排除钱包
+!doc/**/*.json
+
+# 具体排除已知的敏感文件
+withdrawal_wallet.json
+withdrawal_wallet_with_mnemonic.json
+auth_key.json
+scavenger.json
+*.key
+*.pem
+
+# 系统文件
+.DS_Store
+.env
+
+# 临时脚本
+rustup.sh

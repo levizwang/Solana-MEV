@@ -1,0 +1,28 @@
+[package]
+name = "scavenger"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Solana 基础库 - 降级以适配 Jito SDK (v1.14)
+solana-sdk = "1.14"
+solana-client = "1.14"
+solana-account-decoder = "1.14"
+solana-transaction-status = "1.14"
+
+# Jito MEV 客户端
+# 使用 git 依赖以确保兼容性，指向 jito-rs 仓库
+jito-searcher-client = { git = "https://github.com/jito-labs/jito-rs", package = "jito-searcher-client" }
+jito-protos = { git = "https://github.com/jito-labs/jito-rs", package = "jito-protos" }
+
+# 异步运行时
+tokio = { version = "1", features = ["full"] }
+
+# 配置与序列化
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+config = "0.13"
+dotenv = "0.15"
+anyhow = "1.0"
+log = "0.4"
+env_logger = "0.9"

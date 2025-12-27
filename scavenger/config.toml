@@ -1,0 +1,41 @@
+# Scavenger 配置文件
+
+[network]
+# RPC 节点地址 (HTTP) - 建议使用 Helius 或 Triton 的付费节点以获得更低延迟
+rpc_url = "https://api.mainnet-beta.solana.com"
+# WebSocket 地址 (可选，部分策略需要)
+ws_url = "wss://api.mainnet-beta.solana.com"
+
+[jito]
+# Jito Block Engine 地址
+# 常用地址:
+# 阿姆斯特丹: https://amsterdam.mainnet.block-engine.jito.wtf
+# 法兰克福: https://frankfurt.mainnet.block-engine.jito.wtf
+# 纽约: https://ny.mainnet.block-engine.jito.wtf
+# 东京: https://tokyo.mainnet.block-engine.jito.wtf
+block_engine_url = "https://amsterdam.mainnet.block-engine.jito.wtf"
+
+# Jito 鉴权私钥路径 (请填入你的 Keypair 路径)
+# 注意：此 Keypair 需要在 Jito Discord 或官网进行白名单注册（目前通常是开放的，但需签名验证）
+# 生成方式: solana-keygen new -o auth_key.json
+auth_keypair_path = "./auth_key.json"
+
+[strategy]
+# 交易使用的钱包路径 (支付 Gas 和 本金)
+# 可以与 auth_keypair_path 相同，也可以不同
+wallet_path = "./scavenger.json"
+
+# 每次交易使用的 SOL 数量 (例如 1.0)
+trade_amount_sol = 1.0
+
+# Jito 小费 (Tip) 设置
+# 固定小费 (SOL) - 用于低竞争或测试
+static_tip_sol = 0.001
+# 动态小费比例 (利润的百分比，例如 0.5 表示 50%)
+dynamic_tip_ratio = 0.5
+# 最大允许小费 (SOL) - 熔断保护，防止意外亏损
+max_tip_sol = 0.1
+
+[log]
+# 日志级别: trace, debug, info, warn, error
+level = "info"
