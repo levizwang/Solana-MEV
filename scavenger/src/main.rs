@@ -1,5 +1,6 @@
 mod config;
 mod scout;
+mod strategy; // 注册 strategy 模块
 
 use config::AppConfig;
 use scout::Scout;
@@ -20,6 +21,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
     
     info!("🚀 Scavenger (拾荒者) MEV Bot 正在启动...");
+    
+    // 初始化策略模块
+    strategy::init();
 
     // 2. 加载配置
     info!("正在加载配置文件 config.toml...");

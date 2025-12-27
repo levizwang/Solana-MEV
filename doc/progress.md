@@ -17,14 +17,15 @@
     - [x] Jito Block Engine 连接 (gRPC 建立成功)
 
 ### 🚧 Phase 2: 侦察系统 (Scout)
-> **状态**: 20% 进行中
-- [ ] **数据源接入**
+> **状态**: 80% 进行中
+- [x] **数据源接入**
     - [x] gRPC 客户端骨架 (`src/scout/mod.rs`)
-    - [ ] **[TODO]** 实现 Block/Transaction 数据流订阅 (Jito/Geyser)
-    - [ ] **[TODO]** (备选) 实现 RPC 轮询机制
-- [ ] **Raydium 监听器**
-    - [ ] **[TODO]** 识别 `Initialize2` (CPMM) 指令
-    - [ ] **[TODO]** 识别 `Deposit` (流动性添加) 事件
+    - [x] WebSocket 监听器设计 (RPC Logs)
+    - [x] 实现 RPC 日志订阅 (`logsSubscribe`)
+- [x] **Raydium 监听器**
+    - [x] 识别 `Initialize2` (CPMM) 指令
+    - [x] 识别 `Initialize` (Standard AMM) 指令
+    - [ ] **[TODO]** 解析代币 Mint 地址与池子信息 (需 fetch tx)
     - [ ] **[TODO]** 解析代币 Mint 地址与池子信息
 - [ ] **过滤器 (Filter)**
     - [ ] **[TODO]** 基础过滤 (Mint 权限检查)
