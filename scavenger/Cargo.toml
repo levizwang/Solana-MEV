@@ -10,10 +10,17 @@ solana-client = "1.14"
 solana-account-decoder = "1.14"
 solana-transaction-status = "1.14"
 
+# 强制升级 console 依赖以修复 indicatif 编译错误
+console = "0.15"
+
 # Jito MEV 客户端
 # 使用 git 依赖以确保兼容性，指向 jito-rs 仓库
 jito-searcher-client = { git = "https://github.com/jito-labs/jito-rs", package = "jito-searcher-client" }
 jito-protos = { git = "https://github.com/jito-labs/jito-rs", package = "jito-protos" }
+tonic = { version = "0.8", features = ["tls", "tls-roots", "tls-webpki-roots"] } # 降级以匹配 jito-rs 的版本
+prost = "0.11" # Protocol Buffers
+prost-types = "0.11"
+futures-util = "0.3"
 
 # 异步运行时
 tokio = { version = "1", features = ["full"] }

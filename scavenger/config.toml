@@ -5,6 +5,12 @@
 rpc_url = "https://api.mainnet-beta.solana.com"
 # WebSocket 地址 (可选，部分策略需要)
 ws_url = "wss://api.mainnet-beta.solana.com"
+# Geyser gRPC 地址 (Helius/Triton)
+# ⚠️ 注意：标准的公用 RPC (如 mainnet-beta) 通常不支持 Geyser gRPC。
+# 免费/低成本方案：可以使用 Jito 的 Block Engine gRPC 接口来接收部分数据，
+# 或者购买 Helius 开发者套餐 ($49/mo)。
+# 这里先预留配置，Phase 2 暂时使用 Jito Block Engine 作为数据源（如果有）或 RPC 轮询作为备选。
+grpc_url = "https://amsterdam.mainnet.block-engine.jito.wtf"
 
 [jito]
 # Jito Block Engine 地址

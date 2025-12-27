@@ -5,6 +5,7 @@ use serde::Deserialize;
 pub struct NetworkConfig {
     pub rpc_url: String,
     pub ws_url: String,
+    pub grpc_url: String,
 }
 
 #[derive(Debug, Deserialize)]
