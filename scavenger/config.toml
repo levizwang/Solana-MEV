@@ -32,11 +32,11 @@ auth_keypair_path = "./auth_key.json"
 wallet_path = "./scavenger.json"
 
 # 每次交易使用的 SOL 数量 (例如 1.0)
-trade_amount_sol = 1.0
+trade_amount_sol = 0.0001
 
 # Jito 小费 (Tip) 设置
 # 固定小费 (SOL) - 用于低竞争或测试
-static_tip_sol = 0.001
+static_tip_sol = 0.0001
 # 动态小费比例 (利润的百分比，例如 0.5 表示 50%)
 dynamic_tip_ratio = 0.5
 # 最大允许小费 (SOL) - 熔断保护，防止意外亏损

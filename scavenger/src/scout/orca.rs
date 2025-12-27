@@ -124,7 +124,7 @@ pub async fn load_all_whirlpools(rpc_client: Arc<RpcClient>, inventory: Arc<Inve
     // Whirlpool Discriminator: 62, 10, 14, 196, 56, 60, 89, 21
     // derived from sha256("account:Whirlpool")[..8]
     let discriminator: Vec<u8> = vec![62, 10, 14, 196, 56, 60, 89, 21];
-    let discriminator_base58 = bs58::encode(&discriminator).into_string();
+    let _discriminator_base58 = bs58::encode(&discriminator).into_string();
 
     let config = RpcProgramAccountsConfig {
         filters: Some(vec![

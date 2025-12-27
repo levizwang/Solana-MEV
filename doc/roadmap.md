@@ -17,30 +17,31 @@
 
 基于实战分析，原定的“监听 Raydium 新池 -> 去 Orca 套利”策略成功率极低（因为新币在 Orca 通常无流动性）。我们调整为**“存量套利 + 新池狙击”**双轨策略。
 
-### Phase 2.5: 数据孤岛打通 (Data Connectivity)
+### Phase 2.5: 数据孤岛打通 (Data Connectivity) - *Completed*
 > **目标**: 建立全网代币索引，解决“听到消息但不知道去哪套利”的问题。
 
 - [x] **构建全网代币索引 (In-Memory Inventory)**
     - [x] 冷启动：拉取 Orca 所有 Whirlpool，构建 `HashMap<TokenMint, Vec<PoolAddress>>`。(已实现架构，受限于公共RPC无法全量拉取，但逻辑已就绪)
     - [x] 增量更新：监听 `InitializePool` 实时更新内存表。
     - [x] 纳秒级查询：实现 `has_liquidity(token_mint)` 快速判断。
-- [ ] **实现 Orca 本地定价 (Pricing)**
+- [x] **实现 Orca 本地定价 (Pricing)**
     - [x] **数据结构定义**: 完整定义 `Whirlpool` 账户的 Borsh 布局 (Liquidity, SqrtPrice, TickCurrentIndex)。
     - [x] **数学库实现**: 实现 CLMM 价格计算 (SqrtPrice -> Price) 和 Tick Math。
     - [x] **价格预言**: 在侦察到事件时，实时输出 Token 在 Orca 的当前报价 (Quote)。
-- [ ] **升级策略引擎**
-    - [ ] 从单边触发改为双边联动 (Event -> Cache Lookup -> Spread Calc)。
+- [x] **升级策略引擎**
+    - [x] 从单边触发改为双边联动 (Event -> Cache Lookup -> Spread Calc)。
 
-### Phase 3: 交易执行闭环 (Execution Loop)
+### Phase 3: 交易执行闭环 (Execution Loop) - *In Progress*
 > **目标**: 发送第一笔盈利的原子交易。
 
 - [ ] **交易构建器 (Transaction Builder)**
-    - [ ] 实现 Raydium `swap_v2` 指令构建。
+    - [x] 定义 Swap Instruction Data 结构 (Raydium V4)。
+    - [x] 实现 AMM State 解析与 Keys 获取 (`raydium_keys.rs`)。
     - [ ] 实现 Orca `swap` 指令构建。
     - [ ] 账户关联：自动查找 `open_orders`, `tick_arrays` 等辅助账户。
-- [ ] **Jito 集成修复**
-    - [ ] 解决 SDK 版本冲突。
-    - [ ] 实现 Bundle 模拟与发送。
+- [x] **Jito 集成修复**
+    - [x] 解决 SDK 版本冲突 (采用 HTTP JSON-RPC 替代 gRPC SDK)。
+    - [x] 实现 Bundle 模拟与发送 (`jito.rs`)。
 - [ ] **实盘测试 (First Blood)**
     - [ ] 选取特定“僵尸币”进行小额（0.1 SOL）套利测试。
 

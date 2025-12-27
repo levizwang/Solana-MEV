@@ -36,7 +36,7 @@ Scavenger 采用 **Rust 异步架构 (Tokio)**，设计目标为毫秒级响应 
 | 逻辑模块 | 关键功能 | 文件路径 | 代码位置/结构 | 备注 |
 | :--- | :--- | :--- | :--- | :--- |
 | **Swap Builder** | 指令构建 | `scavenger/src/strategy/swap.rs` | `swap_instruction` | 构建 Raydium/Orca Swap IX |
-| **Jito Client** | Bundle 发送 | `scavenger/src/scout/mod.rs` | `JitoClient` | gRPC 连接 Block Engine (目前暂时禁用) |
+| **Jito Client** | Bundle 发送 | `scavenger/src/strategy/jito.rs` | `JitoClient` | HTTP JSON-RPC 连接 Block Engine (Phase 3 修复) |
 | **Config** | 配置管理 | `scavenger/src/config.rs` | `AppConfig` | 加载 `config.toml` |
 | **Wallet** | 密钥管理 | `scavenger/src/main.rs` | `load_keypair` | 管理交易钱包和鉴权钱包 |
 
