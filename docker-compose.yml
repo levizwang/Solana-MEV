@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  scavenger:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: solana-mev-bot
+    restart: unless-stopped
+    
+    # 挂载配置文件和密钥
+    # 格式: 本地路径:容器内路径
+    volumes:
+      - ./scavenger/config.toml:/app/config.toml
+      - ./scavenger/auth_key.json:/app/auth_key.json
+      - ./scavenger/scavenger.json:/app/scavenger.json
+      # 如果需要持久化日志，取消下面注释
+      # - ./logs:/app/logs
+
+    # 网络模式
+    # 在 Linux 上推荐使用 host 模式以获得最低延迟
+    # network_mode: "host"
+    
+    environment:
+      - RUST_LOG=info

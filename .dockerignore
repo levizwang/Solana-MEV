@@ -1,0 +1,9 @@
+target/
+**/*.rs.bk
+.git/
+.DS_Store
+.env
+# 忽略所有 json 密钥文件，防止意外打入镜像
+# 我们会通过 docker-compose 挂载它们
+**/*.json
+!scavenger/package.json

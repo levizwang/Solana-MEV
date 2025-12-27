@@ -55,3 +55,4 @@ Scavenger 是一个高性能的 Solana 链上套利与新池狙击机器人 (MEV
 ## ⚠️ 免责声明
 
 本项目仅供教育和研究使用。在主网使用可能涉及资金风险，请务必在充分理解代码的前提下操作。
+果修改了 config.toml ，只需运行 docker-compose restart 即可应用更改。
