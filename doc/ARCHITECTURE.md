@@ -4,41 +4,44 @@
 
 ## 1. 架构概览 (Overview)
 
-Scavenger 采用 **Rust 异步架构 (Tokio)**，设计目标为毫秒级响应 Solana 链上事件。系统分为三个核心层级：
+Scavenger 采用 **Rust 异步架构 (Tokio)**，设计目标为毫秒级响应 Solana 链上事件。
+系统架构已从早期的“被动全网监听”演进为 **“基于库存的主动监听 (Inventory-Driven Monitoring)”** 模式。
 
-1.  **侦察层 (Scout Layer)**: 负责监听、过滤和解析链上事件（WebSocket/gRPC）。
-2.  **策略层 (Strategy Layer)**: 负责状态维护、机会识别、风险检查和交易构建。
-3.  **执行层 (Execution Layer)**: 负责原子化交易打包和 Jito Bundle 发送。
+系统分为三个核心层级：
+
+1.  **数据层 (Data Layer)**: 负责构建全网代币索引 (Inventory)，识别 Raydium/Orca 共有的套利对，并生成监听白名单。
+2.  **侦察层 (Scout Layer)**: 基于白名单，通过 Geyser/WebSocket 精准监听特定账户 (Account Updates) 的余额与数据变动。
+3.  **策略与执行层 (Strategy & Execution Layer)**: 接收变动事件，进行双向比价 (Pricing)，构建原子交易 (Bundle)，并发送至 Jito Block Engine。
 
 ## 2. 核心逻辑映射 (Core Logic Map)
 
+### 🗄️ 数据与索引 (Data & Inventory)
+
+| 逻辑模块 | 关键功能 | 文件路径 | 备注 |
+| :--- | :--- | :--- | :--- |
+| **Inventory** | 全网代币索引 | `scavenger/src/state.rs` | 核心组件。启动时并发拉取 API，构建 `DashMap<TokenMint, ArbitragePair>`，找出 DEX 间的共有市场。 |
+| **API Fetcher** | 数据预加载 | `scavenger/src/scout/api.rs` | 封装 REST API (Raydium/Orca)，用于冷启动数据获取。 |
+
 ### 🔍 侦察系统 (Scout System)
 
-| 逻辑模块 | 关键功能 | 文件路径 | 代码位置/结构 | 备注 |
-| :--- | :--- | :--- | :--- | :--- |
-| **Monitor** | 多路日志监听 | `scavenger/src/scout/monitor.rs` | `start_monitoring` | 同时订阅 Raydium (`Initialize2`) 和 Orca (`InitializePool`) |
-| **Decoder (Ray)** | Raydium 解析 | `scavenger/src/scout/raydium.rs` | `parse_log_for_new_pool` | 提取 Pool ID, Token Mints |
-| **Decoder (Orca)** | Orca 解析 | `scavenger/src/scout/orca.rs` | `parse_log_for_event` | 提取 Whirlpool ID, Token Mints (使用 REST API 辅助冷启动) |
-| **RPC Client** | 链上数据拉取 | `scavenger/src/scout/mod.rs` | `RpcClient::new` | 使用 Non-blocking Client 异步拉取交易详情 |
+| 逻辑模块 | 关键功能 | 文件路径 | 备注 |
+| :--- | :--- | :--- | :--- |
+| **Monitor** | 精准监听 | `scavenger/src/scout/monitor.rs` | 使用 `SubscribeUpdateAccount` 监听 Inventory 中的 Pool Address。 |
+| **Decoder** | 协议解析 | `scavenger/src/scout/{protocol}.rs` | 直接解析 Account Data (Reserves/SqrtPrice)，而非仅仅依赖 Logs。 |
 
 ### 🧠 策略引擎 (Strategy Engine)
 
-| 逻辑模块 | 关键功能 | 文件路径 | 代码位置/结构 | 备注 |
-| :--- | :--- | :--- | :--- | :--- |
-| **Inventory** | 全网代币索引 | `scavenger/src/state.rs` | `Inventory` | 内存中维护 `DashMap<TokenMint, Vec<PoolAddress>>` |
-| **Pricing (AMM)** | CPMM 价格计算 | `scavenger/src/amm/raydium_v4.rs` | `calculate_price` | $x \cdot y = k$ 模型 |
-| **Pricing (CLMM)** | Whirlpool 报价 | `scavenger/src/amm/orca_whirlpool.rs` | `Whirlpool::decode_current_price` | 解析 `sqrt_price` (Q64.64) 与 Tick Math |
-| **Engine** | 双向比价主控 | `scavenger/src/strategy/engine.rs` | `process_new_pool` | 收到事件 -> 查缓存 -> 比价 -> 触发 |
-| **Risk** | 风险过滤器 | `scavenger/src/strategy/risk.rs` | `check_token_risk` | 检查 Mint/Freeze Authority, Honeypot |
+| 逻辑模块 | 关键功能 | 文件路径 | 备注 |
+| :--- | :--- | :--- | :--- |
+| **Engine** | 双向比价主控 | `scavenger/src/strategy/engine.rs` | 单边变动 -> 查对手盘价格 -> 计算价差 -> 触发。 |
+| **Pricing** | 本地定价 | `scavenger/src/amm/` | 实现 CPMM (Raydium) 和 CLMM (Orca) 的数学模型，不依赖 RPC 模拟。 |
 
 ### ⚙️ 执行与基础设施 (Infrastructure)
 
-| 逻辑模块 | 关键功能 | 文件路径 | 代码位置/结构 | 备注 |
-| :--- | :--- | :--- | :--- | :--- |
-| **Swap Builder** | 指令构建 | `scavenger/src/strategy/swap.rs` | `swap_instruction` | 构建 Raydium/Orca Swap IX |
-| **Jito Client** | Bundle 发送 | `scavenger/src/strategy/jito.rs` | `JitoClient` | HTTP JSON-RPC 连接 Block Engine (Phase 3 修复) |
-| **Config** | 配置管理 | `scavenger/src/config.rs` | `AppConfig` | 加载 `config.toml` |
-| **Wallet** | 密钥管理 | `scavenger/src/main.rs` | `load_keypair` | 管理交易钱包和鉴权钱包 |
+| 逻辑模块 | 关键功能 | 文件路径 | 备注 |
+| :--- | :--- | :--- | :--- |
+| **Swap Builder** | 指令构建 | `scavenger/src/strategy/swap.rs` | 构建 Raydium/Orca Swap IX。 |
+| **Jito Client** | Bundle 发送 | `scavenger/src/strategy/jito.rs` | HTTP JSON-RPC 连接 Block Engine，支持 Bundle 模拟与发送。 |
 
 ---
 
@@ -46,25 +49,28 @@ Scavenger 采用 **Rust 异步架构 (Tokio)**，设计目标为毫秒级响应 
 
 ```mermaid
 graph TD
-    A[Solana RPC/Geyser] -->|Logs/Updates| B(Scout: Monitor)
-    B -->|Filter: Raydium| C{Strategy Engine}
-    B -->|Filter: Orca| C
+    Init[系统启动 Warm-up] --> A[API Fetcher]
+    A -->|拉取 Raydium Pools| B[数据清洗 & 匹配]
+    A -->|拉取 Orca Whirlpools| B
+    B -->|Intersection| C[Inventory (Shared Pairs)]
     
-    C -->|1. Lookup| D[In-Memory Inventory]
-    D -->|Found Match| E[Pricing Engine]
-    D -->|No Match| X[Discard]
+    C -->|生成监听列表 (Watchlist)| D[Scout: Monitor]
     
-    E -->|Get Quote| F(Raydium AMM)
-    E -->|Get Quote| G(Orca Whirlpool)
+    D -->|Subscribe Account Updates| E[Solana Chain]
+    E -->|Pool 余额/价格变动| F[Scout: Decoder]
     
-    F & G -->|Spread > Threshold| H[Arbitrage Builder]
+    F -->|解析最新状态| G{Strategy Engine}
     
-    H -->|2. Risk Check| I[Risk Filter]
-    I -->|Safe| J[Transaction Builder]
+    G -->|1. 获取变动源价格| H[Pricing Engine]
+    G -->|2. 查询对手盘价格 (Cache/RPC)| H
     
-    J -->|3. Atomic Bundle| K[Jito Block Engine]
-    K -->|Send| L[Solana Validators]
+    H -->|Spread > Threshold| I[Transaction Builder]
+    H -->|No Spread| X[Discard]
+    
+    I -->|3. 构建 Atomic Bundle| J[Jito Block Engine]
+    J -->|Send| K[Solana Validators]
 ```
+
 
 ## 4. 技术栈选型 (Tech Stack)
 
