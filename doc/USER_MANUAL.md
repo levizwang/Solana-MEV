@@ -74,7 +74,7 @@ auth_keypair_path = "./auth_key.json"
 
 [strategy]
 wallet_path = "./scavenger.json"
-trade_amount_sol = 0.1
+trade_amount_sol = 0.001
 static_tip_sol = 0.001
 dynamic_tip_ratio = 0.5
 max_tip_sol = 0.002  # 最大允许小费，超过此值会熔断

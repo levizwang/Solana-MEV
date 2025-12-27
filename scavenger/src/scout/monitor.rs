@@ -62,14 +62,24 @@ pub async fn start_monitoring(
         orca_stream.map(|log| (log, "Orca"))
     );
 
+    let mut raydium_log_count = 0;
+
     while let Some((response, source)) = combined_stream.next().await {
         let logs_response: RpcLogsResponse = response.value;
         let logs = &logs_response.logs;
         let signature = &logs_response.signature;
 
         if source == "Raydium" {
+            raydium_log_count += 1;
+            
             if let Some(event) = raydium::parse_log_for_new_pool(signature, logs) {
-                info!("✨ [Raydium] 发现潜在活动! Tx: https://solscan.io/tx/{}", event.signature);
+                // 仅周期性打印日志，减少刷屏
+                if raydium_log_count % 50 == 0 {
+                     info!("✨ [Raydium] 监测中... 已扫描 {} 条相关日志. 最新潜在活动 Tx: https://solscan.io/tx/{}", raydium_log_count, event.signature);
+                } else {
+                     // 使用 debug 级别记录详细日志
+                     log::debug!("✨ [Raydium] 发现潜在活动! Tx: https://solscan.io/tx/{}", event.signature);
+                }
                 
                 let client = rpc_client.clone();
                 let kp = keypair.clone();
@@ -86,8 +96,9 @@ pub async fn start_monitoring(
                 });
             }
         } else if source == "Orca" {
+            // Orca 日志全量打印
             if let Some(event) = orca::parse_log_for_event(signature, logs) {
-                // info!("🌊 [Orca] 发现潜在活动! Tx: https://solscan.io/tx/{}", event.signature);
+                info!("🌊 [Orca] 发现潜在活动! Tx: https://solscan.io/tx/{}", event.signature);
                 
                 let client = rpc_client.clone();
                 let kp = keypair.clone();
