@@ -1,0 +1,18 @@
+network:
+  rpc_url: "https://api.mainnet-beta.solana.com"
+  ws_url: "wss://api.mainnet-beta.solana.com"
+  grpc_url: "https://amsterdam.mainnet.block-engine.jito.wtf"
+
+jito:
+  block_engine_url: "https://amsterdam.mainnet.block-engine.jito.wtf"
+  auth_keypair_path: "auth_key.json"
+
+strategy:
+  wallet_path: "scavenger.json"
+  trade_amount_sol: 0.0001
+  static_tip_sol: 0.0001
+  dynamic_tip_ratio: 0.5
+  max_tip_sol: 0.002
+
+log:
+  level: "info"

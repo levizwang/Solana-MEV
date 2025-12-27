@@ -1,4 +1,5 @@
-use scavenger_lib::{config, scout, strategy, state};
+use clap::Parser;
+use scavenger_lib::{config, scout, core, state};
 use config::AppConfig;
 use scout::Scout;
 use state::Inventory;
@@ -11,27 +12,49 @@ use std::error::Error;
 use std::path::Path;
 use std::sync::Arc;
 
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Strategy to run (e.g., "arb", "sniper")
+    #[arg(short, long, default_value = "arb")]
+    strategy: String,
+
+    /// Path to config file
+    #[arg(short, long, default_value = "config.toml")]
+    config: String,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    let args = Args::parse();
+
     // 1. 初始化日志系统
     if std::env::var("RUST_LOG").is_err() {
         std::env::set_var("RUST_LOG", "info");
     }
     env_logger::init();
     
-    info!("🚀 Scavenger (拾荒者) MEV Bot 正在启动...");
+    info!("🚀 Scavenger (拾荒者) MEV Bot 正在启动... [Strategy: {}]", args.strategy);
     
-    // 初始化策略模块
-    strategy::init();
+    // 初始化核心模块
+    core::init();
 
     // 2. 加载配置
-    info!("正在加载配置文件 config.toml...");
-    let config = match AppConfig::load() {
+    info!("正在加载配置文件 {}...", args.config);
+    let config = match AppConfig::load_from_path(&args.config) {
         Ok(c) => c,
         Err(e) => {
-            error!("❌ 无法加载配置: {}", e);
-            error!("请确保当前目录下存在 config.toml 文件");
-            return Ok(());
+             // Fallback to default if path not found or error, but explicit path should probably fail.
+             // However, for compatibility with existing flow:
+             warn!("⚠️ Failed to load from path '{}': {}. Trying default 'config'...", args.config, e);
+             match AppConfig::load() {
+                 Ok(c) => c,
+                 Err(e) => {
+                     error!("❌ 无法加载配置: {}", e);
+                     error!("请确保配置文件存在");
+                     return Ok(());
+                 }
+             }
         }
     };
     
@@ -96,7 +119,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // 6. 启动 Phase 2: 侦察系统 (Scout)
     info!("正在初始化侦察系统 (Phase 2)...");
     
-    let mut scout = Scout::new(&config, &auth_keypair, inventory).await?;
+    let mut scout = Scout::new(&config, &auth_keypair, inventory, args.strategy).await?;
     scout.start().await;
     
     Ok(())

@@ -1,25 +1,39 @@
 version: '3.8'
 
 services:
-  scavenger:
+  scavenger-arb:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: solana-mev-bot
+    container_name: scavenger-arb
     restart: unless-stopped
+    command: ["python3", "commander/main.py", "--strategy", "arb"]
     
     # 挂载配置文件和密钥
     # 格式: 本地路径:容器内路径
     volumes:
-      - ./scavenger/config.toml:/app/config.toml
-      - ./scavenger/auth_key.json:/app/auth_key.json
-      - ./scavenger/scavenger.json:/app/scavenger.json
+      - ./commander/configs/arb.yaml:/app/commander/configs/arb.yaml
+      - ./scavenger/auth_key.json:/app/scavenger/auth_key.json
+      - ./scavenger/scavenger.json:/app/scavenger/scavenger.json
       # 如果需要持久化日志，取消下面注释
       # - ./logs:/app/logs
 
-    # 网络模式
-    # 在 Linux 上推荐使用 host 模式以获得最低延迟
-    # network_mode: "host"
+    environment:
+      - RUST_LOG=info
+
+  scavenger-sniper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: scavenger-sniper
+    restart: no # 默认不自启，按需启动
+    profiles: ["sniper"] # 使用 profile 隔离，默认 docker-compose up 不会启动它
+    command: ["python3", "commander/main.py", "--strategy", "sniper"]
     
+    volumes:
+      - ./commander/configs/sniper.yaml:/app/commander/configs/sniper.yaml
+      - ./scavenger/auth_key.json:/app/scavenger/auth_key.json
+      - ./scavenger/scavenger.json:/app/scavenger/scavenger.json
+
     environment:
       - RUST_LOG=info

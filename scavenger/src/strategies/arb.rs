@@ -7,11 +7,11 @@ use std::str::FromStr; // Import FromStr for Pubkey
 
 use crate::scout::raydium::NewPoolEvent;
 use crate::scout::orca::OrcaPoolEvent;
-// use crate::strategy::risk;
+// use crate::core::risk;
 use crate::config::StrategyConfig;
 use crate::state::Inventory;
 use crate::amm::orca_whirlpool::Whirlpool;
-use crate::strategy::jito::JitoClient;
+use crate::core::jito::JitoClient;
 
 // Constants for Quote Tokens
 const SOL_MINT: &str = "So11111111111111111111111111111111111111112";

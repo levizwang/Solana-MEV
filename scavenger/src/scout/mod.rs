@@ -25,10 +25,11 @@ pub struct Scout {
     keypair: Arc<Keypair>, // 保存 Keypair 用于传给 Strategy
     strategy_config: StrategyConfig, // 保存策略配置
     inventory: Arc<Inventory>, // 全网代币索引
+    strategy_name: String, // 策略名称
 }
 
 impl Scout {
-    pub async fn new(config: &AppConfig, auth_keypair: &Arc<Keypair>, inventory: Arc<Inventory>) -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn new(config: &AppConfig, auth_keypair: &Arc<Keypair>, inventory: Arc<Inventory>, strategy_name: String) -> Result<Self, Box<dyn std::error::Error>> {
         // info!("🔍 连接 Jito Block Engine: {}", config.jito.block_engine_url);
         
         // let endpoint = Endpoint::from_shared(config.jito.block_engine_url.clone())?;
@@ -57,11 +58,12 @@ impl Scout {
             keypair: auth_keypair.clone(),
             strategy_config,
             inventory,
+            strategy_name,
         })
     }
 
     pub async fn start(&mut self) {
-        info!("👀 侦察兵已就位，开始监听全网新池子...");
+        info!("👀 侦察兵已就位，开始监听全网新池子... [Mode: {}]", self.strategy_name);
         
         // 启动 WebSocket 监听器 (在后台任务中运行)
         let ws_url = self.ws_url.clone();
@@ -69,6 +71,7 @@ impl Scout {
         let keypair = self.keypair.clone(); // Clone for task
         let strategy_config = Arc::new(self.strategy_config.clone()); // Wrap in Arc
         let inventory = self.inventory.clone();
+        let strategy_name = self.strategy_name.clone();
 
         tokio::spawn(async move {
             // 我们需要修改 monitor 以接受 callback 或者 channel
@@ -78,7 +81,7 @@ impl Scout {
             
             // 实际上 monitor::start_monitoring 现在只打印日志
             // 我们需要修改它来调用 engine::process_new_pool
-            if let Err(e) = monitor::start_monitoring(ws_url, rpc_client, keypair, strategy_config, inventory).await {
+            if let Err(e) = monitor::start_monitoring(ws_url, rpc_client, keypair, strategy_config, inventory, strategy_name).await {
                 error!("❌ WebSocket 监听器异常退出: {}", e);
             }
         });

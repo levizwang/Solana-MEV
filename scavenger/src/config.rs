@@ -45,4 +45,12 @@ impl AppConfig {
 
         s.try_deserialize()
     }
+
+    pub fn load_from_path(path: &str) -> Result<Self, ConfigError> {
+        let s = Config::builder()
+            .add_source(File::with_name(path))
+            .build()?;
+
+        s.try_deserialize()
+    }
 }

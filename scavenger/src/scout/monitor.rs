@@ -7,7 +7,8 @@ use solana_sdk::commitment_config::CommitmentConfig;
 use futures::StreamExt;
 use crate::scout::raydium;
 use crate::scout::orca;
-use crate::strategy::engine; // 引入引擎
+use crate::strategies::arb; // 引入 Arb 策略
+use crate::strategies::sniper; // 引入 Sniper 策略
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::signature::Keypair;
 use std::sync::Arc;
@@ -27,6 +28,7 @@ pub async fn start_monitoring(
     keypair: Arc<Keypair>,
     config: Arc<StrategyConfig>,
     inventory: Arc<Inventory>,
+    strategy_name: String,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     info!("🔌 连接 WebSocket: {}", ws_url);
     
@@ -89,6 +91,7 @@ pub async fn start_monitoring(
                 let cfg = config.clone();
                 let sig = event.signature.clone();
                 let inventory_clone = inventory.clone();
+                let strat = strategy_name.clone();
                 
                 tokio::spawn(async move {
                     if let Some(full_event) = raydium::fetch_and_parse_tx(client.clone(), &sig).await {
@@ -96,7 +99,15 @@ pub async fn start_monitoring(
                             full_event.pool_id, full_event.token_a, full_event.token_b);
                         
                         // 交由策略引擎全权处理 (含 Inventory 检查和套利逻辑)
-                        engine::process_new_pool(client, kp, full_event, cfg, inventory_clone).await;
+                        if strat == "arb" {
+                            arb::process_new_pool(client, kp, full_event, cfg, inventory_clone).await;
+                        } else if strat == "sniper" {
+                             // Sniper currently uses a different signature or needs to be adapted. 
+                             // Using placeholder for now.
+                             sniper::execute(client, kp, cfg, inventory_clone).await;
+                        } else {
+                            log::warn!("Unknown strategy: {}", strat);
+                        }
                     }
                 });
             }
@@ -110,6 +121,7 @@ pub async fn start_monitoring(
                 let cfg = config.clone();
                 let sig = event.signature.clone();
                 let inventory_clone = inventory.clone();
+                let strat = strategy_name.clone();
 
                 tokio::spawn(async move {
                     if let Some(full_event) = orca::fetch_and_parse_tx(client.clone(), &sig).await {
@@ -135,7 +147,10 @@ pub async fn start_monitoring(
                         }
 
                         // 触发策略引擎处理 Orca 事件
-                        engine::process_orca_event(client, kp, full_event, cfg).await;
+                        if strat == "arb" {
+                            arb::process_orca_event(client, kp, full_event, cfg).await;
+                        }
+                        // Sniper usually ignores Orca events or just logs them
                     }
                 });
             }

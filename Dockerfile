@@ -40,11 +40,11 @@ RUN cargo build --release --bin scavenger
 
 # === 运行阶段 (Runner) ===
 # 使用轻量级 Debian Slim 镜像
-FROM debian:bookworm-slim
+FROM python:3.9-slim-bookworm
 
 WORKDIR /app
 
-# 安装运行时依赖
+# 安装系统运行时依赖
 RUN apt-get update && apt-get install -y \
     libssl3 \
     libudev1 \
@@ -54,11 +54,14 @@ RUN apt-get update && apt-get install -y \
 # 从构建阶段复制编译好的二进制文件
 COPY --from=builder /usr/src/app/scavenger/target/release/scavenger /usr/local/bin/scavenger
 
+# 复制 Commander 和 Configs
+COPY commander /app/commander
+
 # 创建日志目录
 RUN mkdir -p /app/logs
 
 # 设置环境变量
 ENV RUST_LOG=info
 
-# 启动命令
-CMD ["scavenger"]
+# 启动命令 (默认使用 Python Commander 启动 arb 策略)
+CMD ["python3", "commander/main.py", "--strategy", "arb"]
