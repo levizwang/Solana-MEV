@@ -9,12 +9,35 @@ Scavenger 是一个高性能的 Solana 链上套利与新池狙击机器人 (MEV
 ## 📚 文档
 
 - **[📖 系统使用手册 (User Manual)](doc/USER_MANUAL.md)**: 包含详细的安装、配置和运行指南。
-- **[🗺 核心逻辑映射 (Core Logic)](doc/core_logic_map.md)**: 代码结构与业务逻辑的映射表。
-- **[🚧 开发进度 (Progress)](doc/progress.md)**: 当前开发状态与路线图。
+- **[🏗 系统架构 (Architecture)](doc/ARCHITECTURE.md)**: 详细的系统分层架构、数据流向图与核心逻辑映射。
+- **[🛣 开发路线图 (Roadmap)](doc/ROADMAP.md)**: 当前开发状态、战略转型规划与详细任务清单。
+
+## 📂 项目结构
+
+```text
+/Users/yqg/Documents/Solana-MEV/ 
+ ├── README.md           <-- 项目入口与文档索引 
+ ├── .gitignore          <-- 忽略敏感文件 
+ ├── doc/                <-- 核心文档库 
+ │   ├── ARCHITECTURE.md <-- 架构设计 
+ │   ├── ROADMAP.md      <-- 开发计划 
+ │   └── USER_MANUAL.md  <-- 操作手册 
+ └── scavenger/          <-- Rust 核心代码库 (Crate) 
+     ├── config.toml     <-- 配置文件 
+     ├── auth_key.json   <-- Jito 私钥 
+     ├── scavenger.json  <-- 交易私钥 
+     ├── Cargo.toml 
+     └── src/ 
+         ├── bin/ 
+         ├── scout/      <-- 侦察兵 (监听) 
+         ├── strategy/   <-- 策略引擎 (核心) 
+         ├── amm/        <-- 定价算法 
+         └── ... 
+```
 
 ## 🚀 快速开始
 
-1. **配置**: 编辑 `scavenger/config.toml`。
+1. **配置**: 编辑 `scavenger/config.toml`，确保 `rpc_url` 配置正确。
 2. **运行**:
    ```bash
    cd scavenger
@@ -23,10 +46,11 @@ Scavenger 是一个高性能的 Solana 链上套利与新池狙击机器人 (MEV
 
 ## ✨ 核心特性
 
-- **极速侦察**: 基于 WebSocket 的毫秒级新池监听 (Raydium V4)。
+- **极速侦察**: 基于 WebSocket 的毫秒级新池监听 (Raydium V4 & Orca Whirlpool)。
 - **智能解析**: 自动抓取并解析交易数据，提取 Token Mint 和 Pool ID。
-- **Jito 集成**: 内置 Jito Block Engine 客户端，支持 Bundle 发送 (开发中)。
-- **Rust 原生**: 内存安全，低延迟。
+- **多路策略**: 支持从 Raydium 新池狙击到跨 DEX 套利的多种策略扩展。
+- **Jito 集成**: 内置 Jito Block Engine 客户端架构，为抗 MEV 交易打包做好准备。
+- **Rust 原生**: 内存安全，低延迟，无繁重 SDK 依赖。
 
 ## ⚠️ 免责声明
 

@@ -2,93 +2,123 @@ use std::sync::Arc;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
-use log::{info, warn};
+use log::{info, warn, error};
+use std::str::FromStr;
+
 use crate::scout::raydium::NewPoolEvent;
+use crate::scout::orca::OrcaPoolEvent;
 use crate::strategy::risk;
 use crate::config::StrategyConfig;
+use crate::state::Inventory;
+use crate::amm::orca_whirlpool::Whirlpool;
 
-use crate::scout::orca::OrcaPoolEvent;
-use crate::strategy::quote;
+// Constants for Quote Tokens
+const SOL_MINT: &str = "So11111111111111111111111111111111111111112";
+const USDC_MINT: &str = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 
 // 处理 Raydium 新池事件
 pub async fn process_new_pool(
     rpc_client: Arc<RpcClient>,
-    _keypair: Arc<Keypair>, // 交易签名者
+    _keypair: Arc<Keypair>, 
     event: NewPoolEvent,
     config: Arc<StrategyConfig>,
+    inventory: Arc<Inventory>,
 ) {
-    info!("⚙️ 策略引擎启动: 处理新池 {}", event.pool_id);
-    info!("💡 使用策略配置: Max Tip = {} SOL, Trade Amount = {} SOL", config.max_tip_sol, config.trade_amount_sol);
+    info!("⚙️ [Strategy] 收到 Raydium 新池: {} | Token A: {} | Token B: {}", event.pool_id, event.token_a, event.token_b);
 
-    // 1. 风险检查 (Honeypot Check)
-    // 假设我们要买 Token B (如果是 SOL 对，通常 Token A 是 WSOL, Token B 是 MEME，或者反过来)
-    // 需要判断哪个是 SOL。这里简化假设 Token A 是 WSOL。
-    // 实际需要检查 Mint 地址是否为 So11111111111111111111111111111111111111112
+    // 1. 风险检查 (Honeypot Check) - 优先检查
+    // 识别 Base Token (非 SOL/USDC 的那个)
+    let base_token = if is_quote_token(&event.token_a) { event.token_b } else { event.token_a };
     
-    let target_token = event.token_b; // 假设 Token B 是目标代币
-    
-    if let Some(risk_report) = risk::check_token_risk(&rpc_client, &target_token).await {
-        if !risk_report.is_safe {
-            warn!("🛑 风险检查未通过，跳过交易");
+    // 快速风险过滤 (仅作示例，实际可并行)
+    // if let Some(risk_report) = risk::check_token_risk(&rpc_client, &base_token).await {
+    //     if !risk_report.is_safe {
+    //         warn!("🛑 [Risk] 风险检查未通过: {}, 跳过", base_token);
+    //         return;
+    //     }
+    // }
+
+    // 2. 核心联动: 查全网代币索引 (Inventory)
+    // 检查 Base Token 是否在 Orca 上有流动性
+    if inventory.has_liquidity(&base_token) {
+        info!("🎯 [Match] 命中! Token {} 在 Orca 上存在流动性池", base_token);
+        
+        // 3. 并行获取价格 (Raydium Initial Price vs Orca Current Price)
+        let orca_pools = inventory.get_pools(&base_token).unwrap_or_default();
+        if orca_pools.is_empty() {
+            warn!("⚠️ [Inventory] 数据不一致: has_liquidity 为 true 但 pool 列表为空");
             return;
         }
-    } else {
-        warn!("⚠️ 无法获取风险报告，跳过");
-        return;
-    }
 
-    // 2. 构建 Swap 指令
-    // 这一步非常复杂，因为我们需要获取 Pool 的所有关联账户 (Vaults, OpenOrders, Serum Market 等)
-    // 这些信息通常在 Pool 的 Account Data 中。
-    // 因此我们需要先 fetch_pool_state(event.pool_id)
-    
-    // 由于时间限制，这里仅展示逻辑框架
-    info!("🚀 准备构建 Swap 交易...");
-    
-    // let pool_keys = fetch_pool_keys(&rpc_client, &event.pool_id).await?;
-    // let swap_ix = swap::swap(...);
-    
-    // 3. 构建 Jito Bundle
-    // let bundle = Bundle::new(...);
-    // client.send_bundle(bundle).await;
-    
-    info!("✅ (模拟) 交易已发送至 Jito Block Engine");
+        // 简单起见，取第一个 Orca 池子
+        let orca_pool_id = orca_pools[0];
+        
+        // 3.1 获取 Orca 价格
+        let orca_price_task = get_orca_price(rpc_client.clone(), orca_pool_id);
+        
+        // 3.2 获取 Raydium 价格 (这里暂时模拟，因为解析 Raydium AMM State 比较复杂)
+        // 实际逻辑: Fetch Raydium Pool Account -> Parse Vaults -> Fetch Vault Balances -> Divide
+        let ray_price_task = mock_get_raydium_price(); 
+
+        let (orca_res, ray_res) = tokio::join!(orca_price_task, ray_price_task);
+
+        if let (Some(orca_p), Some(ray_p)) = (orca_res, ray_res) {
+            info!("📊 [Price Check] Orca: ${:.6} | Raydium: ${:.6}", orca_p, ray_p);
+            
+            // 4. 计算价差
+            let spread = (orca_p - ray_p) / ray_p;
+            info!("📈 [Spread] 价差: {:.2}%", spread * 100.0);
+
+            if spread > 0.05 { // 5% 阈值
+                info!("🚀 [EXECUTE] 触发套利! 买入 Raydium -> 卖出 Orca");
+                // execute_arbitrage(...)
+            } else if spread < -0.05 {
+                 info!("🚀 [EXECUTE] 触发套利! 买入 Orca -> 卖出 Raydium");
+            } else {
+                info!("zzz [Skip] 价差不足，忽略");
+            }
+        } else {
+            warn!("⚠️ 无法获取完整价格数据，跳过比对");
+        }
+
+    } else {
+        info!("❄️ [No Match] Token {} 在 Orca 无流动性，进入纯狙击模式 (Sniping Mode)", base_token);
+        // 执行纯狙击策略 (Buy -> Wait -> Sell)
+    }
 }
 
-// 处理 Orca 事件 (套利触发器)
+// 处理 Orca 事件 (保留原有逻辑，可扩展)
 pub async fn process_orca_event(
     rpc_client: Arc<RpcClient>,
-    _keypair: Arc<Keypair>,
+    keypair: Arc<Keypair>,
     event: OrcaPoolEvent,
-    _config: Arc<StrategyConfig>,
+    config: Arc<StrategyConfig>,
 ) {
-    info!("⚙️ 策略引擎 (Orca): 检测到活动 Pool {}", event.pool_id);
-    
-    // 逻辑：
-    // 1. 确定 Token A 和 Token B
-    // 2. 假设 Token A 是 SOL (或 USDC)，Token B 是目标资产
-    // 3. 立即去 Raydium 查询 Token B 的价格
-    
-    // 假设 Token B 是非 SOL 代币
-    let target_token = event.token_b; 
-    
-    // 查询 Raydium 价格
-    // 注意：我们需要知道 Token B 在 Raydium 对应的 Pool ID
-    // 这是一个难点，通常需要维护一个 Token -> Pool 映射表
-    // 这里简化：假设我们已经知道或者能通过 getProgramAccounts 查到
-    
-    // 模拟 Pool ID
-    let raydium_pool_id = Pubkey::new_unique(); 
-    
-    let amount_in = 1_000_000_000; // 1 SOL
-    if let Some(quote_out) = quote::get_raydium_quote(rpc_client.clone(), &raydium_pool_id, amount_in, &target_token).await {
-        info!("📊 Raydium 报价: 1 SOL -> {} Lamports", quote_out);
-        
-        // 4. 比较价格 (Orca vs Raydium)
-        // 如果价差 > 阈值，触发 Bundle
-        
-        // info!("🚀 发现价差! 发送原子套利 Bundle...");
-    } else {
-        // warn!("⚠️ 无法获取 Raydium 报价 (可能该代币未在 Raydium 上市)");
+    // 这里的逻辑也可以升级，反向查 Raydium
+    info!("⚙️ [Strategy-Orca] Pool Event: {}", event.pool_id);
+}
+
+// --- Helpers ---
+
+fn is_quote_token(mint: &Pubkey) -> bool {
+    let s = mint.to_string();
+    s == SOL_MINT || s == USDC_MINT
+}
+
+async fn get_orca_price(rpc_client: Arc<RpcClient>, pool_id: Pubkey) -> Option<f64> {
+    match rpc_client.get_account_data(&pool_id).await {
+        Ok(data) => {
+            if let Some(price_info) = Whirlpool::decode_current_price(&data) {
+                return Some(price_info.price);
+            }
+        },
+        Err(e) => error!("❌ Fetch Orca Pool Error: {}", e),
     }
+    None
+}
+
+async fn mock_get_raydium_price() -> Option<f64> {
+    // 模拟一个价格，用于演示流程
+    // 实际开发中需要实现真正的 fetch & calc
+    Some(0.123456)
 }

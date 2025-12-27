@@ -1,9 +1,11 @@
-use scavenger_lib::{config, scout, strategy};
+use scavenger_lib::{config, scout, strategy, state};
 use config::AppConfig;
 use scout::Scout;
+use state::Inventory;
 use log::{info, error, warn};
 use solana_sdk::signature::{Keypair, Signer};
 use solana_client::rpc_client::RpcClient;
+use solana_client::nonblocking::rpc_client::RpcClient as NonBlockingRpcClient;
 use solana_sdk::native_token::LAMPORTS_PER_SOL;
 use std::error::Error;
 use std::path::Path;
@@ -79,10 +81,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // 鉴权钱包 (通常与交易钱包相同，或者是单独的)
     let auth_keypair = Arc::new(read_keypair_from_file(&config.jito.auth_keypair_path)?);
 
-    // 5. 启动 Phase 2: 侦察系统 (Scout)
+    // 5. 初始化 Phase 2.5: 数据层 (Inventory)
+    info!("🧠 正在构建全网代币索引 (Inventory)...");
+    let inventory = Arc::new(Inventory::new());
+
+    // 异步启动 Cold Start 全量加载
+    let inv_clone = inventory.clone();
+    let rpc_url_clone = config.network.rpc_url.clone();
+    tokio::spawn(async move {
+        let rpc_client_nb = Arc::new(NonBlockingRpcClient::new(rpc_url_clone));
+        scout::orca::load_all_whirlpools(rpc_client_nb, inv_clone).await;
+    });
+
+    // 6. 启动 Phase 2: 侦察系统 (Scout)
     info!("正在初始化侦察系统 (Phase 2)...");
     
-    let mut scout = Scout::new(&config, &auth_keypair).await?;
+    let mut scout = Scout::new(&config, &auth_keypair, inventory).await?;
     scout.start().await;
     
     Ok(())

@@ -16,6 +16,7 @@ pub mod orca; // 引入 Orca 解析模块
 // use crate::strategy::engine; // 引入策略引擎 (removed unused import)
 
 use crate::config::StrategyConfig;
+use crate::state::Inventory;
 
 pub struct Scout {
     // client: SearcherServiceClient<Channel>,
@@ -23,10 +24,11 @@ pub struct Scout {
     ws_url: String, 
     keypair: Arc<Keypair>, // 保存 Keypair 用于传给 Strategy
     strategy_config: StrategyConfig, // 保存策略配置
+    inventory: Arc<Inventory>, // 全网代币索引
 }
 
 impl Scout {
-    pub async fn new(config: &AppConfig, auth_keypair: &Arc<Keypair>) -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn new(config: &AppConfig, auth_keypair: &Arc<Keypair>, inventory: Arc<Inventory>) -> Result<Self, Box<dyn std::error::Error>> {
         // info!("🔍 连接 Jito Block Engine: {}", config.jito.block_engine_url);
         
         // let endpoint = Endpoint::from_shared(config.jito.block_engine_url.clone())?;
@@ -54,6 +56,7 @@ impl Scout {
             ws_url: config.network.ws_url.clone(),
             keypair: auth_keypair.clone(),
             strategy_config,
+            inventory,
         })
     }
 
@@ -65,7 +68,8 @@ impl Scout {
         let rpc_client = self.rpc_client.clone();
         let keypair = self.keypair.clone(); // Clone for task
         let strategy_config = Arc::new(self.strategy_config.clone()); // Wrap in Arc
-        
+        let inventory = self.inventory.clone();
+
         tokio::spawn(async move {
             // 我们需要修改 monitor 以接受 callback 或者 channel
             // 这里为了简单，我们直接在 monitor 内部调用 strategy
@@ -74,7 +78,7 @@ impl Scout {
             
             // 实际上 monitor::start_monitoring 现在只打印日志
             // 我们需要修改它来调用 engine::process_new_pool
-            if let Err(e) = monitor::start_monitoring(ws_url, rpc_client, keypair, strategy_config).await {
+            if let Err(e) = monitor::start_monitoring(ws_url, rpc_client, keypair, strategy_config, inventory).await {
                 error!("❌ WebSocket 监听器异常退出: {}", e);
             }
         });

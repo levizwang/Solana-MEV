@@ -32,6 +32,7 @@ uint = "0.9"
 tonic = "0.9" # 保留 Tonic 以防万一
 prost = "0.11"
 futures = "0.3"
+dashmap = "6.1.0"
 
 # 临时移除 jito 依赖以修复编译，专注于 AMM 实现
 # [dependencies.jito-searcher-client]

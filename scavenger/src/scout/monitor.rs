@@ -18,12 +18,15 @@ pub const RAYDIUM_AMM_V4: &str = "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8";
 pub const ORCA_WHIRLPOOL: &str = "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc";
 
 use crate::config::StrategyConfig;
+use crate::state::Inventory;
+use crate::amm::orca_whirlpool::Whirlpool;
 
 pub async fn start_monitoring(
     ws_url: String, 
     rpc_client: Arc<RpcClient>,
     keypair: Arc<Keypair>,
     config: Arc<StrategyConfig>,
+    inventory: Arc<Inventory>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     info!("🔌 连接 WebSocket: {}", ws_url);
     
@@ -85,13 +88,15 @@ pub async fn start_monitoring(
                 let kp = keypair.clone();
                 let cfg = config.clone();
                 let sig = event.signature.clone();
+                let inventory_clone = inventory.clone();
                 
                 tokio::spawn(async move {
                     if let Some(full_event) = raydium::fetch_and_parse_tx(client.clone(), &sig).await {
                         info!("🎉 [Raydium] 成功解析池子详情: Pool: {}, TokenA: {}, TokenB: {}", 
                             full_event.pool_id, full_event.token_a, full_event.token_b);
                         
-                        engine::process_new_pool(client, kp, full_event, cfg).await;
+                        // 交由策略引擎全权处理 (含 Inventory 检查和套利逻辑)
+                        engine::process_new_pool(client, kp, full_event, cfg, inventory_clone).await;
                     }
                 });
             }
@@ -104,12 +109,31 @@ pub async fn start_monitoring(
                 let kp = keypair.clone();
                 let cfg = config.clone();
                 let sig = event.signature.clone();
+                let inventory_clone = inventory.clone();
 
                 tokio::spawn(async move {
                     if let Some(full_event) = orca::fetch_and_parse_tx(client.clone(), &sig).await {
                         info!("🌊 [Orca] 成功解析池子详情: Pool: {}, TokenA: {}, TokenB: {}", 
                             full_event.pool_id, full_event.token_a, full_event.token_b);
                         
+                        // 实时更新 Inventory
+                        inventory_clone.add_pool(full_event.token_a, full_event.token_b, full_event.pool_id);
+
+                        // 尝试获取池子当前价格
+                        match client.get_account_data(&full_event.pool_id).await {
+                            Ok(data) => {
+                                if let Some(price_info) = Whirlpool::decode_current_price(&data) {
+                                     info!("💲 [Orca Pricing] Pool: {} | Price: {:.6} | Tick: {} | Liquidity: {}", 
+                                        full_event.pool_id, price_info.price, price_info.tick, price_info.liquidity);
+                                } else {
+                                     info!("⚠️ [Orca Pricing] 无法解析价格数据 (Data Len: {})", data.len());
+                                }
+                            },
+                            Err(e) => {
+                                info!("⚠️ [Orca Pricing] 获取账户数据失败: {}", e);
+                            }
+                        }
+
                         // 触发策略引擎处理 Orca 事件
                         engine::process_orca_event(client, kp, full_event, cfg).await;
                     }
