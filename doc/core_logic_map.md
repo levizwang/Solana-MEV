@@ -14,8 +14,11 @@
 
 | 逻辑模块 | 关键功能 | 文件路径 | 代码位置/结构 | 备注 |
 | :--- | :--- | :--- | :--- | :--- |
-| **Filtering** | 蜜罐/权限检测 | `scavenger/src/strategy/filter.rs` | TBD | Phase 3 |
-| **Execution** | Jito Bundle 构建 | `scavenger/src/strategy/bundle.rs` | TBD | Phase 3 |
+| **Risk Filter** | 蜜罐/权限检测 | `scavenger/src/strategy/risk.rs` | `check_token_risk` | 检查 Mint/Freeze Authority |
+| **Swap (Raydium)** | Raydium Swap 指令构建 | `scavenger/src/strategy/swap.rs` | `swap` | 构建 V4 Swap Instruction |
+| **Swap (Orca)** | Orca Swap 指令构建 | `scavenger/src/strategy/orca.rs` | `swap` | 模拟 Whirlpool Swap Instruction |
+| **Arbitrage** | 原子套利组装 | `scavenger/src/strategy/arbitrage.rs` | `execute_arbitrage` | 组装 `[Orca, Raydium, Jito]` 原子交易 |
+| **Engine** | 策略主控流程 | `scavenger/src/strategy/engine.rs` | `process_new_pool` | 串联 Scout -> Risk -> Execution |
 
 ## ⚙️ 基础设施 (Infrastructure)
 

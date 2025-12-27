@@ -9,6 +9,9 @@
 *   **全网监听**: 通过 WebSocket 实时监听 Solana 主网的所有交易日志。
 *   **新池发现**: 毫秒级识别 Raydium AMM (V4) 的新流动性池创建事件 (`Initialize2`)。
 *   **深度解析**: 自动抓取并解析交易数据，提取 **Pool ID** (池子地址)、**Token Mint A** (代币A)、**Token Mint B** (代币B)。
+*   **策略引擎 (Alpha)**: 
+    *   内置 **Raydium** 和 **Orca** (Whirlpool) 的 Swap 指令构建器。
+    *   支持 **原子套利 (Atomic Arbitrage)**: 将 "买入 -> 卖出 -> Jito贿赂" 打包为单笔交易，实现无风险套利（模拟失败即不上链）。
 *   **Jito 集成**: 已集成 Jito Block Engine 连接，为未来的 MEV 交易打包做好了准备。
 
 ---

@@ -55,6 +55,11 @@
 > **提示**: 您的 `withdrawal_wallet.json` 如果不再使用可以不迁移，但建议备份。
 
 ## 📝 最近更新
+- **2025-12-25**:
+    - **核心策略模块实现**:
+        - 新增 `src/strategy/orca.rs`: 实现 Orca Whirlpool 协议的 Swap 指令构建。
+        - 新增 `src/strategy/arbitrage.rs`: 实现原子套利引擎，支持 `Orca -> Raydium -> Jito` 三步原子交易。
+    - 更新文档库以反映最新的模块架构。
 - **2025-12-24**: 
     - 细化进度树，明确 Phase 2/3 的 TODO 项。
     - 添加迁移指南，列出关键敏感文件。

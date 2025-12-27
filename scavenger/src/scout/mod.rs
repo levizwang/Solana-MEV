@@ -10,7 +10,8 @@ use tonic::transport::Endpoint;
 use solana_client::nonblocking::rpc_client::RpcClient;
 
 mod monitor; // 引入监控模块
-pub mod raydium; // 引入解析模块 (需要 pub 供 strategy 使用)
+pub mod raydium; // 引入 Raydium 解析模块
+pub mod orca; // 引入 Orca 解析模块
 
 use crate::strategy::engine; // 引入策略引擎
 
