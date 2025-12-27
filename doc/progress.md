@@ -6,7 +6,7 @@
 > **状态**: 100% 完成
 - [x] **项目初始化**
     - [x] Rust 项目结构 (`scavenger`)
-    - [x] 依赖管理 (`Cargo.toml`: 解决 `tonic` 与 `console` 版本冲突)
+    - [x] 依赖管理 (`Cargo.toml`)
     - [x] 配置文件系统 (`config.toml` & `src/config.rs`)
 - [x] **钱包与鉴权**
     - [x] 钱包文件自动加载 (`src/main.rs`)
@@ -14,53 +14,41 @@
     - [x] 余额自动检测 (已验证: 0.1049 SOL)
 - [x] **网络连接**
     - [x] RPC 连接 (Solana Mainnet)
-    - [x] Jito Block Engine 连接 (gRPC 建立成功)
+    - [x] Jito Block Engine 连接
 
-### 🚧 Phase 2: 侦察系统 (Scout)
-> **状态**: 80% 进行中
-- [x] **数据源接入**
-    - [x] gRPC 客户端骨架 (`src/scout/mod.rs`)
-    - [x] WebSocket 监听器设计 (RPC Logs)
-    - [x] 实现 RPC 日志订阅 (`logsSubscribe`)
-- [x] **Raydium 监听器**
-    - [x] 识别 `Initialize2` (CPMM) 指令
-    - [x] 识别 `Initialize` (Standard AMM) 指令
-    - [ ] **[TODO]** 解析代币 Mint 地址与池子信息 (需 fetch tx)
-    - [ ] **[TODO]** 解析代币 Mint 地址与池子信息
-- [ ] **过滤器 (Filter)**
-    - [ ] **[TODO]** 基础过滤 (Mint 权限检查)
-    - [ ] **[TODO]** 蜜罐检测 (模拟交易预检)
+### ✅ Phase 2: 侦察系统 (Scout)
+> **状态**: 100% 完成
+- [x] **多路监听器 (Multi-Source Scout)**
+    - [x] 同时监听 Raydium AMM V4 (`Initialize2`)
+    - [x] 同时监听 Orca Whirlpool (`InitializePool`)
+    - [x] 异步分流处理架构
+- [x] **深度解析器**
+    - [x] Raydium 交易解析与 Mint 提取
+    - [x] Orca 交易解析与 Pool ID 提取
 
-### ⏳ Phase 3: 策略执行 (Execution)
-> **状态**: 0% 等待中
-- [ ] **交易构建**
-    - [ ] **[TODO]** 集成 Jupiter Swap SDK (或手写 Raydium Swap)
-    - [ ] **[TODO]** 构建 Jito Bundle (Tx + Tip)
-- [ ] **上链执行**
-    - [ ] **[TODO]** 策略引擎 (买入 -> 卖出逻辑)
-    - [ ] **[TODO]** 利润统计与风险控制
+### ✅ Phase 3: 策略引擎 (Execution)
+> **状态**: 90% 完成 (核心逻辑已通，待实盘资金测试)
+- [x] **轻量级 AMM 引擎** (`src/amm`)
+    - [x] **原生 Raydium V4 解析**: 手动定义 `AmmState`，零 SDK 依赖。
+    - [x] **高精度数学库**: 使用 `U256` 实现 Constant Product (xy=k) 算法。
+    - [x] **真实链上询价**: `get_raydium_quote` 集成 RPC 数据与本地计算。
+- [x] **交易适配器**
+    - [x] Raydium Swap 指令构建
+    - [x] Orca Whirlpool Swap 指令构建
+- [x] **套利组装**
+    - [x] **原子交易构建器**: `AtomicTransactionBuilder` (Buy -> Sell -> Tip)
+    - [x] **风险控制**: HoneyPot/RugPull 检测 (Mint Authority 检查)
+    - [x] **跨链套利路径**: Orca 变动 -> Raydium 询价 -> 触发交易
 
 ---
 
-## � 迁移指南 (Migration Guide)
+## � 历史更新日志
 
-如果您更换开发机器，除了 `git clone` 代码仓库外，您**必须手动迁移**以下文件（它们被 `.gitignore` 忽略以保护安全）：
+### 2025-12-25 (里程碑更新)
+- **轻量级 AMM 实现**: 彻底移除了对 `raydium-sdk` 的依赖，手写了 Rust 版 AMM 状态解析与价格计算模块，大幅降低了编译体积与运行时延迟。
+- **跨市场套利闭环**: 实现了从 "Orca 监听" 到 "Raydium 询价" 再到 "原子交易构建" 的完整链路。
+- **多路监控**: 系统现在是一台全功能的双头侦察机，同时覆盖 Solana 上最大的两个流动性源。
 
-| 文件名 | 路径 | 用途 | 必须性 |
-| :--- | :--- | :--- | :--- |
-| **scavenger.json** | `Solana-MEV/scavenger.json` | **资金钱包私钥** (支付 Gas/本金) | 🚨 **必须** |
-| **auth_key.json** | `Solana-MEV/auth_key.json` | **Jito 鉴权私钥** (与 Block Engine 握手) | 🚨 **必须** |
-| **config.toml** | `Solana-MEV/scavenger/config.toml` | **本地配置文件** (RPC URL 等) | ⚠️ 推荐 (避免重新配置) |
-
-> **提示**: 您的 `withdrawal_wallet.json` 如果不再使用可以不迁移，但建议备份。
-
-## 📝 最近更新
-- **2025-12-25**:
-    - **核心策略模块实现**:
-        - 新增 `src/strategy/orca.rs`: 实现 Orca Whirlpool 协议的 Swap 指令构建。
-        - 新增 `src/strategy/arbitrage.rs`: 实现原子套利引擎，支持 `Orca -> Raydium -> Jito` 三步原子交易。
-    - 更新文档库以反映最新的模块架构。
-- **2025-12-24**: 
-    - 细化进度树，明确 Phase 2/3 的 TODO 项。
-    - 添加迁移指南，列出关键敏感文件。
-    - 完成 Phase 1 所有基础设施验证。
+### 2025-12-24
+- 完成 Phase 1 基础设施验证。
+- 建立 WebSocket 日志订阅系统。

@@ -3,43 +3,51 @@ name = "scavenger"
 version = "0.1.0"
 edition = "2021"
 
+# Jito Searcher Client (如果使用)
+# jito-searcher-client = { git = "https://github.com/jito-foundation/jito-solana.git", package = "jito-searcher-client", version = "0.1.0" }
+# jito-protos = { git = "https://github.com/jito-foundation/jito-solana.git", package = "jito-protos", version = "0.1.0" }
+# 由于 Jito SDK 版本问题，暂时使用本地 Mock 或注释掉，先完成 Raydium AMM 的实现
+# 真实生产中应使用固定 tag 版本
+
 [dependencies]
-# Solana 基础库 - 降级以适配 Jito SDK (v1.14)
 solana-sdk = "1.14"
 solana-client = "1.14"
-solana-account-decoder = "1.14"
 solana-transaction-status = "1.14"
-
-# 强制升级 console 依赖以修复 indicatif 编译错误
-console = "0.15"
-
-# Jito MEV 客户端
-# 使用 git 依赖以确保兼容性，指向 jito-rs 仓库
-jito-searcher-client = { git = "https://github.com/jito-labs/jito-rs", package = "jito-searcher-client" }
-jito-protos = { git = "https://github.com/jito-labs/jito-rs", package = "jito-protos" }
-tonic = { version = "0.8", features = ["tls", "tls-roots", "tls-webpki-roots"] } # 降级以匹配 jito-rs 的版本
-prost = "0.11" # Protocol Buffers
-prost-types = "0.11"
-futures-util = "0.3"
-futures = "0.3" # 用于 Stream 处理
-base64 = "0.21" # 用于 Instruction Data 解析
-
-# 异步运行时
-tokio = { version = "1", features = ["full"] }
-
-# 配置与序列化
+solana-account-decoder = "1.14"
+tokio = { version = "1.0", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 config = "0.13"
-dotenv = "0.15"
-anyhow = "1.0"
 log = "0.4"
 env_logger = "0.9"
 
 # Token 解析与 Swap 构建
 spl-token = { version = "3.5", features = ["no-entrypoint"] }
 spl-associated-token-account = { version = "1.1", features = ["no-entrypoint"] }
-borsh = "0.10"
-borsh-derive = "0.10"
-bs58 = "0.4" # 用于解析 Base58 地址
+borsh = "0.9"
+borsh-derive = "0.9"
+bs58 = "0.4"
+bytemuck = "1.13" 
+uint = "0.9" 
+tonic = "0.9" # 保留 Tonic 以防万一
+prost = "0.11"
+futures = "0.3"
+
+# 临时移除 jito 依赖以修复编译，专注于 AMM 实现
+# [dependencies.jito-searcher-client]
+# git = "https://github.com/jito-foundation/jito-solana.git"
+# package = "jito-searcher-client"
+
+# [dependencies.jito-protos]
+# git = "https://github.com/jito-foundation/jito-solana.git"
+# package = "jito-protos"
+
+[lib]
+name = "scavenger_lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "scavenger"
+path = "src/main.rs"
+
 

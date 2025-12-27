@@ -1,45 +1,59 @@
 use std::sync::Arc;
 // use tokio::sync::mpsc;
-use log::{info, error, warn};
+use log::{info, error};
 use solana_sdk::signature::Keypair;
 // use jito_searcher_client::get_searcher_client_no_auth; 
-use jito_protos::searcher::searcher_service_client::SearcherServiceClient;
-use tonic::transport::Channel;
+// use jito_protos::searcher::searcher_service_client::SearcherServiceClient;
+// use tonic::transport::Channel;
 use crate::config::AppConfig;
-use tonic::transport::Endpoint;
+// use tonic::transport::Endpoint;
 use solana_client::nonblocking::rpc_client::RpcClient;
 
 mod monitor; // 引入监控模块
 pub mod raydium; // 引入 Raydium 解析模块
 pub mod orca; // 引入 Orca 解析模块
 
-use crate::strategy::engine; // 引入策略引擎
+// use crate::strategy::engine; // 引入策略引擎 (removed unused import)
+
+use crate::config::StrategyConfig;
 
 pub struct Scout {
-    client: SearcherServiceClient<Channel>,
+    // client: SearcherServiceClient<Channel>,
     rpc_client: Arc<RpcClient>, // 添加 RPC Client
     ws_url: String, 
     keypair: Arc<Keypair>, // 保存 Keypair 用于传给 Strategy
+    strategy_config: StrategyConfig, // 保存策略配置
 }
 
 impl Scout {
     pub async fn new(config: &AppConfig, auth_keypair: &Arc<Keypair>) -> Result<Self, Box<dyn std::error::Error>> {
-        info!("🔍 连接 Jito Block Engine: {}", config.jito.block_engine_url);
+        // info!("🔍 连接 Jito Block Engine: {}", config.jito.block_engine_url);
         
-        let endpoint = Endpoint::from_shared(config.jito.block_engine_url.clone())?;
-        let channel = endpoint.connect().await?;
-        let client = SearcherServiceClient::new(channel);
+        // let endpoint = Endpoint::from_shared(config.jito.block_engine_url.clone())?;
+        // let channel = endpoint.connect().await?;
+        // let client = SearcherServiceClient::new(channel);
 
-        info!("✅ Jito Searcher Client 连接成功 (No Auth Mode)");
+        // info!("✅ Jito Searcher Client 连接成功 (No Auth Mode)");
+        info!("🚧 Jito Client 暂时禁用 (SDK Version Mismatch)，仅使用 RPC");
         
         // 初始化 RPC Client (Non-blocking)
         let rpc_client = Arc::new(RpcClient::new(config.network.rpc_url.clone()));
         
+        // Clone strategy config
+        let strategy_config = StrategyConfig {
+            wallet_path: config.strategy.wallet_path.clone(),
+            trade_amount_sol: config.strategy.trade_amount_sol,
+            static_tip_sol: config.strategy.static_tip_sol,
+            dynamic_tip_ratio: config.strategy.dynamic_tip_ratio,
+            max_tip_sol: config.strategy.max_tip_sol,
+        };
+        
         Ok(Self { 
-            client,
+            // client,
             rpc_client,
             ws_url: config.network.ws_url.clone(),
             keypair: auth_keypair.clone(),
+            strategy_config,
         })
     }
 
@@ -50,6 +64,7 @@ impl Scout {
         let ws_url = self.ws_url.clone();
         let rpc_client = self.rpc_client.clone();
         let keypair = self.keypair.clone(); // Clone for task
+        let strategy_config = Arc::new(self.strategy_config.clone()); // Wrap in Arc
         
         tokio::spawn(async move {
             // 我们需要修改 monitor 以接受 callback 或者 channel
@@ -59,7 +74,7 @@ impl Scout {
             
             // 实际上 monitor::start_monitoring 现在只打印日志
             // 我们需要修改它来调用 engine::process_new_pool
-            if let Err(e) = monitor::start_monitoring(ws_url, rpc_client, keypair).await {
+            if let Err(e) = monitor::start_monitoring(ws_url, rpc_client, keypair, strategy_config).await {
                 error!("❌ WebSocket 监听器异常退出: {}", e);
             }
         });

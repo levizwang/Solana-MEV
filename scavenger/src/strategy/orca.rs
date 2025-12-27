@@ -1,8 +1,6 @@
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
     pubkey::Pubkey,
-    system_program,
-    sysvar,
 };
 use borsh::{BorshSerialize, BorshDeserialize};
 

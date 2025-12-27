@@ -1,7 +1,4 @@
-mod config;
-mod scout;
-mod strategy; // 注册 strategy 模块
-
+use scavenger_lib::{config, scout, strategy};
 use config::AppConfig;
 use scout::Scout;
 use log::{info, error, warn};

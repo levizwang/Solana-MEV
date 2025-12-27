@@ -40,7 +40,7 @@ static_tip_sol = 0.001
 # 动态小费比例 (利润的百分比，例如 0.5 表示 50%)
 dynamic_tip_ratio = 0.5
 # 最大允许小费 (SOL) - 熔断保护，防止意外亏损
-max_tip_sol = 0.1
+max_tip_sol = 0.002
 
 [log]
 # 日志级别: trace, debug, info, warn, error

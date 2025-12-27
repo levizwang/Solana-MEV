@@ -1,20 +1,20 @@
 use config::{Config, ConfigError, File};
 use serde::Deserialize;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct NetworkConfig {
     pub rpc_url: String,
     pub ws_url: String,
     pub grpc_url: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct JitoConfig {
     pub block_engine_url: String,
     pub auth_keypair_path: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct StrategyConfig {
     pub wallet_path: String,
     pub trade_amount_sol: f64,
@@ -23,12 +23,12 @@ pub struct StrategyConfig {
     pub max_tip_sol: f64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct LogConfig {
     pub level: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct AppConfig {
     pub network: NetworkConfig,
     pub jito: JitoConfig,

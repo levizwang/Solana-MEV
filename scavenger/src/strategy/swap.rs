@@ -1,11 +1,7 @@
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
     pubkey::Pubkey,
-    system_program,
-    sysvar,
 };
-use spl_token::instruction as token_instruction;
-use std::mem::size_of;
 
 // Raydium Swap Instruction Data Layout
 // discriminator (1 byte) + amount_in (8 bytes) + min_amount_out (8 bytes)

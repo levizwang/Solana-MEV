@@ -1,4 +1,4 @@
-use log::{info, warn};
+use log::info;
 
 // 利润计算配置
 pub struct ProfitConfig {

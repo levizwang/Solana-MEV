@@ -7,8 +7,9 @@
 **Scavenger** 是一个高性能的 Solana MEV 机器人框架，专为捕捉链上套利机会而设计。
 当前版本已完成 **Phase 3 准备阶段**，具备以下核心能力：
 *   **全网监听**: 通过 WebSocket 实时监听 Solana 主网的所有交易日志。
-*   **新池发现**: 毫秒级识别 Raydium AMM (V4) 的新流动性池创建事件 (`Initialize2`)。
+*   **多路侦察**: 同时监控 **Raydium AMM V4** (新池) 和 **Orca Whirlpool** (价格变动)。
 *   **深度解析**: 自动抓取并解析交易数据，提取 **Pool ID** (池子地址)、**Token Mint A** (代币A)、**Token Mint B** (代币B)。
+*   **轻量级 AMM**: 内置 Rust 原生实现的 Raydium AMM 状态解析与 Swap 算法 (Constant Product)，零重型 SDK 依赖。
 *   **策略引擎 (Alpha)**: 
     *   内置 **Raydium** 和 **Orca** (Whirlpool) 的 Swap 指令构建器。
     *   支持 **原子套利 (Atomic Arbitrage)**: 将 "买入 -> 卖出 -> Jito贿赂" 打包为单笔交易，实现无风险套利（模拟失败即不上链）。
@@ -76,7 +77,7 @@ wallet_path = "./scavenger.json"
 trade_amount_sol = 0.1
 static_tip_sol = 0.001
 dynamic_tip_ratio = 0.5
-max_tip_sol = 0.1
+max_tip_sol = 0.002  # 最大允许小费，超过此值会熔断
 
 [log]
 level = "info"
@@ -105,22 +106,23 @@ cargo run --bin scavenger
 2.  **开始监听**:
     ```text
     🔌 连接 WebSocket: wss://...
-    ✅ WebSocket 连接成功，开始订阅日志...
-    👀 正在监听 Raydium AMM v4 日志...
+    ✅ WebSocket 连接成功，开始多路订阅 (Raydium & Orca)...
+    👀 正在监听 Raydium V4 和 Orca Whirlpool 日志...
     ```
 
 3.  **发现新池子**:
     当链上有人创建新池子时，你会立即看到：
     ```text
-    ✨ 发现潜在新池子! Tx: https://solscan.io/tx/5...
+    ✨ [Raydium] 发现潜在活动! Tx: https://solscan.io/tx/5...
     ```
 
-4.  **解析详情 (Phase 3 核心)**:
-    系统会自动去抓取该交易的详情。如果 RPC 响应及时，你会看到：
+4.  **跨市场套利触发**:
+    当检测到 Orca 上的大额变动时：
     ```text
-    🎉 成功解析池子详情: Pool: 7X..., TokenA: So11..., TokenB: EPj...
+    🌊 [Orca] 成功解析池子详情...
+    ⚙️ 策略引擎 (Orca): 检测到活动 Pool ...
+    🧮 链上计算: Pool=..., In=1000000000, Out=...
     ```
-    *如果没有看到这条，或者看到重试日志，通常是因为 Public RPC 尚未索引到该交易。这是正常现象，更换为付费 RPC 可解决。*
 
 ---
 
@@ -128,8 +130,14 @@ cargo run --bin scavenger
 
 ### 核心模块
 *   **Scout (`src/scout`)**: 系统的“眼睛”。
-    *   `monitor.rs`: 维护 WebSocket 长连接，过滤 `Initialize2` 日志。
-    *   `raydium.rs`: 交易解析器。它包含智能重试逻辑，能够处理 RPC 的 `Transaction not found` 错误，从原始二进制数据中提取账户信息。
+    *   `monitor.rs`: 维护 WebSocket 长连接，分流 Raydium/Orca 日志。
+    *   `raydium.rs` / `orca.rs`: 专用的协议解析器。
+*   **AMM Engine (`src/amm`)**: 
+    *   `raydium_v4.rs`: 手写实现的 Raydium V4 状态反序列化 (Borsh)。
+    *   `math.rs`: 基于 `U256` 的 Constant Product Swap 算法，确保计算精度与链上一致。
+*   **Strategy (`src/strategy`)**:
+    *   `quote.rs`: 集成 RPC 数据与本地 AMM 算法，实现真实的链上询价。
+    *   `arbitrage.rs`: 原子交易组装器，负责打包 Tx + Jito Tip。
 
 ### 为什么需要异步抓取？
 Solana 的 `logsSubscribe` 推送非常快（毫秒级），但它只包含“发生了什么”，不包含“具体参数”（如 Token 地址）。
@@ -141,11 +149,8 @@ Solana 的 `logsSubscribe` 推送非常快（毫秒级），但它只包含“�
 
 ## 6. 常见问题 (FAQ)
 
-**Q: 为什么我只看到 "发现潜在新池子"，却看不到 "成功解析池子详情"？**
-A: 这通常是因为您使用的是公共 RPC节点。公共节点在交易上链后，可能有 10-30 秒的索引延迟，甚至找不到交易。我们的系统会重试 5 次（约 2.5 秒），如果 RPC 依然返回空，就会放弃。**解决方案**: 使用 Helius 或 QuickNode 的付费服务。
-
-**Q: Jito 连接是必须的吗？**
-A: 在目前的侦察阶段，Jito 连接用于建立通道，不是必须的（您可以忽略相关日志）。但在未来的 **Phase 4 (交易执行)** 阶段，必须通过 Jito 发送 Bundle 才能实现防夹子 (Sandwich Protection) 和 失败不付费 (Revert Protection)。
+**Q: 为什么日志中显示 "Jito Client 暂时禁用"？**
+A: 目前我们专注于通过 RPC 进行数据抓取和模拟计算。Jito SDK 的 gRPC 接口在某些版本上存在兼容性问题，因此暂时使用 HTTP RPC 替代。这不影响侦察和策略逻辑的验证。
 
 **Q: 如何停止程序？**
 A: 按 `Ctrl + C` 即可安全退出。
