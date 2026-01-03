@@ -1,0 +1,3 @@
+# Commander (Python Control Plane) dependencies
+# Currently no external dependencies required.
+# Standard library used: argparse, subprocess, os, sys
